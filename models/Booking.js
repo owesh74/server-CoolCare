@@ -11,6 +11,10 @@ const BookingSchema = new mongoose.Schema({
         ref: 'Service',
         required: true,
     },
+    customerName: { // NEW FIELD ADDED
+        type: String,
+        required: true,
+    },
     date: {
         type: String, // YYYY-MM-DD
         required: true,

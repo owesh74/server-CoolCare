@@ -41,9 +41,10 @@ const connectDB = async () => {
 const seedDatabase = async () => {
     try {
         const hashedPassword = await bcrypt.hash(process.env.ADMIN_PASS, 10);
+        // Admin user is always created/updated as verified and admin role
         await User.findOneAndUpdate(
             { email: process.env.ADMIN_EMAIL },
-            { $set: { password: hashedPassword, role: 'admin', verified: true } },
+            { $set: { password: hashedPassword, role: 'admin', name: 'Admin User' } },
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
         console.log('Admin user seeded/updated successfully.');

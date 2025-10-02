@@ -7,7 +7,7 @@ const nodemailer = require('nodemailer');
 
 const router = express.Router();
 
-// Middleware to protect routes with JWT
+// Middleware to protect routes with JWT (ONLY used for /my route below)
 const auth = (req, res, next) => {
     const token = req.header('x-auth-token');
     if (!token) {
@@ -22,7 +22,7 @@ const auth = (req, res, next) => {
     }
 };
 
-// Nodemailer transporter
+// Nodemailer transporter (kept for booking emails)
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
@@ -32,13 +32,20 @@ const transporter = nodemailer.createTransport({
 });
 
 // @route   POST /api/bookings
-// @desc    Create a new booking and send email notification
-router.post('/', auth, async (req, res) => {
-    const { serviceId, date, time, address, contactNumber } = req.body;
+// @desc    Create a new booking (PUBLIC ROUTE)
+router.post('/', async (req, res) => { // REMOVED 'auth' middleware
+    const { name, serviceId, date, time, address, contactNumber } = req.body; // Name is here
     try {
+        // Find the first user (Admin) to satisfy the model's userId requirement
+        const adminUser = await User.findOne({ role: 'admin' });
+        if (!adminUser) {
+            return res.status(500).json({ msg: 'System error: Admin user not found for booking assignment.' });
+        }
+        
         const newBooking = new Booking({
-            userId: req.user.id,
+            userId: adminUser._id, // Assigned to admin ID for simplicity
             serviceId,
+            customerName: name, // SAVE THE NAME HERE
             date,
             time,
             address,
@@ -46,24 +53,25 @@ router.post('/', auth, async (req, res) => {
         });
         const booking = await newBooking.save();
 
-        // Fetch user and service details for email notification
-        const user = await User.findById(req.user.id);
+        // Fetch service details for email notification
         const service = await Service.findById(serviceId);
 
-        if (user && service) {
+        if (service) {
             const mailOptions = {
                 from: process.env.EMAIL_USER,
                 to: process.env.ADMIN_EMAIL,
-                subject: 'New CoolCare Service Booking!',
+                subject: `New CoolCare Service Booking from ${name}`, // UPDATED SUBJECT
                 html: `
-                    <h2>New Booking Details</h2>
+                    <h2>New Public Booking Details</h2>
                     <p><strong>Service:</strong> ${service.name}</p>
                     <p><strong>Date:</strong> ${new Date(date).toLocaleDateString()}</p>
                     <p><strong>Time:</strong> ${time}</p>
-                    <p><strong>Address:</strong> ${address}</p>
-                    <p><strong>User Name:</strong> ${user.name}</p>
-                    <p><strong>User Email:</strong> ${user.email}</p>
+                    <hr/>
+                    <p><strong>Full Name:</strong> ${name}</p>
                     <p><strong>Contact Number:</strong> ${contactNumber}</p>
+                    <p><strong>Address:</strong> ${address}</p>
+                    <hr/>
+                    <p>Please call ${name} at ${contactNumber} immediately to confirm the service.</p>
                 `,
             };
 
@@ -76,7 +84,7 @@ router.post('/', auth, async (req, res) => {
             });
         }
 
-        res.json(booking);
+        res.json({ message: 'Service booked successfully! You will get a call from our technician soon.' });
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');
@@ -84,7 +92,7 @@ router.post('/', auth, async (req, res) => {
 });
 
 // @route   GET /api/bookings/my
-// @desc    Get all bookings for the logged-in user
+// @desc    Get all bookings for the logged-in user (PROTECTED, can be removed if not needed, but kept here)
 router.get('/my', auth, async (req, res) => {
     try {
         const bookings = await Booking.find({ userId: req.user.id }).populate('serviceId', ['name', 'price']);
